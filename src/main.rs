@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
     http::StatusCode,
     response::IntoResponse,
@@ -56,7 +56,7 @@ async fn get_mytable (State(pool):State<PgPool>, Path(nomer): Path<i64>)
     Ok(Json(result))   
 }
 
-pub async fn create_mytable( State(pool):State<PgPool>, Json(my_table):Json<MyTable>) 
+async fn create_mytable( State(pool):State<PgPool>, Json(my_table):Json<MyTable>) 
     -> Result<Json<Value>, (StatusCode, String)> {
     let string_query = "INSERT INTO mytable (nomer,nama,alamat) VALUES ($1, $2, $3)";
     let _result = sqlx::query(string_query)
@@ -70,6 +70,17 @@ pub async fn create_mytable( State(pool):State<PgPool>, Json(my_table):Json<MyTa
     Ok(Json(json!(my_table))) 
 }
 
+async fn delete_mytable (State(pool):State<PgPool>, Path(nomer): Path<i64>) 
+    -> Result<Json<Vec<MyTable>>, (StatusCode, String)> {
+    let string_query = "DELETE FROM mytable WHERE nomer = $1";
+    let result = sqlx::query_as(string_query)
+        .bind(nomer)
+        .fetch_all(&pool)
+        .await
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error is: {}", err)))?;
+
+    Ok(Json(result))   
+}
 
 
 #[tokio::main]
@@ -107,6 +118,7 @@ async fn main() -> Result<(), sqlx::Error> {
         .route("/api/mytable", get(getall_mytable))
         .route("/api/mytable/:nomer", get(get_mytable))
         .route("/api/mytable", post(create_mytable))
+        .route("/api/mytable/:nomer", delete(delete_mytable))
         .with_state(pool)
         .layer(cors);
     
