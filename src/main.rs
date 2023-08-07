@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post, delete},
+    routing::{get, post, delete, put},
     Router,
     http::StatusCode,
     response::IntoResponse,
@@ -21,6 +21,13 @@ pub struct MyTable {
     alamat: String,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[allow(non_snake_case)]
+pub struct MyTableUpdate {
+    nama: String,
+    alamat: String,
 }
 
 async fn health_checker_handler() -> impl IntoResponse {
@@ -67,7 +74,7 @@ async fn create_mytable( State(pool):State<PgPool>, Json(my_table):Json<MyTable>
         .await
         .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error is: {}", err)))?;
 
-    Ok(Json(json!(my_table))) 
+    Ok(Json(json!({"msg": "Data inserted successfully"})))
 }
 
 async fn delete_mytable (State(pool):State<PgPool>, Path(nomer): Path<i64>) 
@@ -80,6 +87,20 @@ async fn delete_mytable (State(pool):State<PgPool>, Path(nomer): Path<i64>)
         .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error is: {}", err)))?;
 
     Ok(Json(result))   
+}
+
+async fn update_mytable( State(pool):State<PgPool>, Path(nomer): Path<i64>, Json(my_table):Json<MyTableUpdate>) 
+    -> Result<Json<Value>, (StatusCode, String)> {
+    let string_query = "UPDATE mytable SET nama = $2, alamat = $3 WHERE nomer = $1";
+    let _result = sqlx::query(string_query)
+        .bind(nomer)
+        .bind(&my_table.nama)
+        .bind(&my_table.alamat)
+        .execute(&pool)
+        .await
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error is: {}", err)))?;
+
+    Ok(Json(json!({"msg": "Data updated successfully"})))
 }
 
 
@@ -116,9 +137,10 @@ async fn main() -> Result<(), sqlx::Error> {
         .route("/", get(health_checker_handler))
         .route("/health_checker_handler", get(health_checker_handler))
         .route("/api/mytable", get(getall_mytable))
-        .route("/api/mytable/:nomer", get(get_mytable))
         .route("/api/mytable", post(create_mytable))
+        .route("/api/mytable/:nomer", get(get_mytable))
         .route("/api/mytable/:nomer", delete(delete_mytable))
+        .route("/api/mytable/:nomer", put(update_mytable))
         .with_state(pool)
         .layer(cors);
     
